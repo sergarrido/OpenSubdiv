@@ -343,6 +343,8 @@ void GetBSplineWeights(PatchParam const & param,
 void GetGregoryWeights(PatchParam const & param,
     float s, float t, float point[20], float deriv1[20], float deriv2[20]) {
 
+float deriv11[20], deriv22[20], deriv12[20], deriv21[20]; // **hardcoding it by now, assuming cross derivatives are different
+
     //
     //  P3         e3-      e2+         P2
     //     15------17-------11--------10
@@ -380,13 +382,13 @@ void GetGregoryWeights(PatchParam const & param,
     //  interior points will be denoted G -- so we have B(s), B(t) and G(s,t):
     //
     //  Directional Bezier basis functions B at s and t:
-    float Bs[4], Bds[4];
-    float Bt[4], Bdt[4];
+    float Bs[4], Bds[4], Bdss[4];
+    float Bt[4], Bdt[4], Bdtt[4];
 
     param.Normalize(s,t);
 
-    Spline<BASIS_BEZIER>::GetWeights(s, Bs, deriv1 ? Bds : 0);
-    Spline<BASIS_BEZIER>::GetWeights(t, Bt, deriv2 ? Bdt : 0);
+    Spline<BASIS_BEZIER>::GetWeights(s, Bs, deriv1 ? Bds : 0, deriv11 ? Bdss : 0);
+    Spline<BASIS_BEZIER>::GetWeights(t, Bt, deriv2 ? Bdt : 0, deriv22 ? Bdtt : 0);
 
     //  Rational multipliers G at s and t:
     float sC = 1.0f - s;
@@ -484,6 +486,63 @@ void GetGregoryWeights(PatchParam const & param,
         }
 #endif
     }
+
+    // **** SECOND DERIVATIVES. NOT TESTED!!!
+    if (deriv11 and deriv22 and deriv12 and deriv21) {
+
+        float dScale = (float)(1 << param.GetDepth());
+
+        // boundary points
+        for (int i = 0; i < 12; ++i) {
+            int iDst = boundaryGregory[i];
+            int tRow = boundaryBezTRow[i];
+            int sCol = boundaryBezSCol[i];
+
+            deriv11[iDst] = Bdss[sCol] * Bt[tRow] * dScale;
+            deriv22[iDst] = Bdtt[tRow] * Bs[sCol] * dScale;
+            deriv12[iDst] = deriv21[iDst] = Bds[sCol] * Bdt[tRow] * dScale;
+        }
+
+        // interior points
+        //float N[8] = {   s,     t,      t,     sC,      sC,     tC,      tC,     s };
+        float D[8] = {   df0,   df0,    df1,    df1,     df2,    df2,     df3,   df3 };
+        // Note D is actually 1/D !! So G = N*D
+
+        static float const Nds[8] = { 1.0f, 0.0f,  0.0f, -1.0f, -1.0f,  0.0f,  0.0f,  1.0f };
+        static float const Ndt[8] = { 0.0f, 1.0f,  1.0f,  0.0f,  0.0f, -1.0f, -1.0f,  0.0f };
+
+        static float const Dds[8] = { 1.0f, 1.0f, -1.0f, -1.0f, -1.0f, -1.0f,  1.0f,  1.0f };
+        static float const Ddt[8] = { 1.0f, 1.0f,  1.0f,  1.0f, -1.0f, -1.0f, -1.0f, -1.0f };
+
+        //  Combined weights for interior points -- (scaled) combinations of B, B', G and G':
+        for (int i = 0; i < 8; ++i) {
+            int iDst = interiorGregory[i];
+            int tRow = interiorBezTRow[i];
+            int sCol = interiorBezSCol[i];
+
+            //  Quotient rule for G' (re-expressed in terms of G to simplify (and D = 1/D)):
+            float Gds = (Nds[i] - Dds[i] * G[i]) * D[i];
+            float Gdt = (Ndt[i] - Ddt[i] * G[i]) * D[i];
+
+            // Second derivatives of G
+            float DD = D[i] * D[i];
+            float Gdss = Nds[i] * Dds[i] * DD - Dds[i] * ( Gds * D[i] + G[i] * DD * Dds[i] );
+            float Gdst = Nds[i] * Ddt[i] * DD - Dds[i] * ( Gdt * D[i] + G[i] * DD * Ddt[i] );
+
+            float Gdtt = Ndt[i] * Ddt[i] * DD - Ddt[i] * ( Gdt * D[i] + G[i] * DD * Ddt[i] );
+            float Gdts = Ndt[i] * Dds[i] * DD - Ddt[i] * ( Gds * D[i] + G[i] * DD * Dds[i] );
+
+            //  Second derivatives for interior points
+            deriv11[iDst] = Bt[tRow] * ( Gds * Bds[sCol] + G[i] * Bdss[sCol] + Bds[sCol] * Gds + Bs[sCol] * Gdss ) * dScale;
+            deriv22[iDst] = Bs[sCol] * ( Gdt * Bdt[tRow] + G[i] * Bdtt[tRow] + Bdt[tRow] * Gdt + Bt[tRow] * Gdtt ) * dScale;
+
+            deriv12[iDst] = ( Bds[sCol] * ( Bdt[tRow] * G[i] + Bt[tRow] * Gdt ) + Bs[sCol] * (Bdt[tRow] * Gds + Bt[tRow] * Gdst )) * dScale;
+            deriv21[iDst] = ( Bdt[tRow] * ( Bds[sCol] * G[i] + Bs[sCol] * Gds ) + Bt[tRow] * (Bds[sCol] * Gdt + Bs[sCol] * Gdts )) * dScale;
+
+        }
+
+    }
+
 }
 
 } // end namespace internal
