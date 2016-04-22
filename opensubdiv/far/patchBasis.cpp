@@ -54,7 +54,8 @@ public:
 
     // patch weights
     static void GetPatchWeights(PatchParam const & param,
-        float s, float t, float point[], float deriv1[], float deriv2[], float derivSS[]=0, float derivTT[]=0, float derivST[]=0);
+        float s, float t, float point[], float derivS[], float derivT[],
+        float derivSS[]=0, float derivTT[]=0, float derivST[]=0);
 
     // adjust patch weights for boundary (and corner) edges
     static void AdjustBoundaryWeights(PatchParam const & param,
@@ -181,12 +182,15 @@ inline void Spline<BASIS_BOX_SPLINE>::GetWeights(
 
 template <>
 inline void Spline<BASIS_BILINEAR>::GetPatchWeights(PatchParam const & param,
-    float s, float t, float point[4], float derivS[4], float derivT[4], float derivSS[4], float derivTT[4],  float derivST[4]) {
+    float s, float t, float point[4], float derivS[4], float derivT[4],
+    float derivSS[4], float derivTT[4],  float derivST[4]) {
 
     assert( (derivS != NULL && derivT != NULL) || (derivS == NULL && derivT == NULL) );
-    assert( (derivSS != NULL && derivTT != NULL && derivST != NULL) || (derivSS == NULL && derivTT == NULL && derivST == NULL) );
+    assert( (derivSS != NULL && derivTT != NULL && derivST != NULL) ||
+            (derivSS == NULL && derivTT == NULL && derivST == NULL) );
 
     param.Normalize(s,t);
+    float dScale = 1.0f/(float)param.GetParamFraction();
 
     float sC = 1.0f - s,
           tC = 1.0f - t;
@@ -199,7 +203,6 @@ inline void Spline<BASIS_BILINEAR>::GetPatchWeights(PatchParam const & param,
     }
     
     if (derivS and derivT) {
-        float dScale = (float)(1 << param.GetDepth());
 
         derivS[0] = -tC * dScale;
         derivS[1] =  tC * dScale;
@@ -213,7 +216,7 @@ inline void Spline<BASIS_BILINEAR>::GetPatchWeights(PatchParam const & param,
     }
 
     if (derivSS and derivTT and derivST) {
-        float dScale = (float)(1 << param.GetDepth());
+        float dScale2 = dScale*dScale;
 
         derivSS[0] =  0.0f;
         derivSS[1] =  0.0f;
@@ -225,10 +228,10 @@ inline void Spline<BASIS_BILINEAR>::GetPatchWeights(PatchParam const & param,
         derivTT[2] =  0.0f;
         derivTT[3] =  0.0f;
 
-        derivST[0] =  1.0f * dScale;
-        derivST[1] = -1.0f * dScale;
-        derivST[2] =  1.0f * dScale;
-        derivST[3] = -1.0f * dScale;
+        derivST[0] =  1.0f * dScale2;
+        derivST[1] = -1.0f * dScale2;
+        derivST[2] =  1.0f * dScale2;
+        derivST[3] = -1.0f * dScale2;
     }
 
 }
@@ -263,17 +266,22 @@ void Spline<BASIS>::AdjustBoundaryWeights(PatchParam const & param,
 
 template <SplineBasis BASIS>
 void Spline<BASIS>::GetPatchWeights(PatchParam const & param,
-    float s, float t, float point[16], float derivS[16], float derivT[16], float derivSS[16], float derivTT[16], float derivST[16]) {
+    float s, float t, float point[16], float derivS[16], float derivT[16],
+    float derivSS[16], float derivTT[16], float derivST[16]) {
 
     assert( (derivS != NULL && derivT != NULL) || (derivS == NULL && derivT == NULL) );
-    assert( (derivSS != NULL && derivTT != NULL && derivST != NULL) || (derivSS == NULL && derivTT == NULL && derivST == NULL) );
+    assert( (derivSS != NULL && derivTT != NULL && derivST != NULL) ||
+            (derivSS == NULL && derivTT == NULL && derivST == NULL) );
 
     float sWeights[4], tWeights[4], dsWeights[4], dtWeights[4], dssWeights[4], dttWeights[4];
 
     param.Normalize(s,t);
+    float dScale = 1.0/(float)param.GetParamFraction();
 
-    Spline<BASIS>::GetWeights(s, point ? sWeights : 0, derivS ? dsWeights : 0, derivSS ? dssWeights : 0);
-    Spline<BASIS>::GetWeights(t, point ? tWeights : 0, derivT ? dtWeights : 0, derivTT ? dttWeights : 0);
+    Spline<BASIS>::GetWeights(s, point ? sWeights : 0, derivS ? dsWeights : 0,
+                              derivSS ? dssWeights : 0);
+    Spline<BASIS>::GetWeights(t, point ? tWeights : 0, derivT ? dtWeights : 0,
+                              derivTT ? dttWeights : 0);
 
     if (point) {
         // Compute the tensor product weight of the (s,t) basis function
@@ -291,9 +299,6 @@ void Spline<BASIS>::GetPatchWeights(PatchParam const & param,
     if (derivS and derivT) {
         // Compute the tensor product weight of the differentiated (s,t) basis
         // function corresponding to each control vertex (scaled accordingly):
-
-        float dScale = (float)(1 << param.GetDepth());
-
         AdjustBoundaryWeights(param, dsWeights, dtWeights);
 
         for (int i = 0; i < 4; ++i) {
@@ -306,16 +311,15 @@ void Spline<BASIS>::GetPatchWeights(PatchParam const & param,
 
     if (derivSS and derivTT and derivST) {
         // Second derivative
-
-        float dScale = (float)(1 << param.GetDepth());
+        float dScale2 = dScale*dScale;
 
         AdjustBoundaryWeights(param, dssWeights, dttWeights);
 
         for (int i = 0; i < 4; ++i) {
             for (int j = 0; j < 4; ++j) {
-                derivSS[4*i+j] = dssWeights[j] * tWeights[i] * dScale;
-                derivTT[4*i+j] = sWeights[j] * dttWeights[i] * dScale;
-                derivST[4*i+j] = dsWeights[j] * dtWeights[i] * dScale;
+                derivSS[4*i+j] = dssWeights[j] * tWeights[i] * dScale2;
+                derivTT[4*i+j] = sWeights[j] * dttWeights[i] * dScale2;
+                derivST[4*i+j] = dsWeights[j] * dtWeights[i] * dScale2;
             }
         }
     }
@@ -323,27 +327,30 @@ void Spline<BASIS>::GetPatchWeights(PatchParam const & param,
 }
 
 void GetBilinearWeights(PatchParam const & param,
-    float s, float t, float point[4], float deriv1[4], float deriv2[4], float deriv11[4], float deriv22[4], float deriv12[4]) {
+    float s, float t, float point[4], float derivS[4], float derivT[4],
+    float derivSS[4], float derivTT[4], float derivST[4]) {
 
-    Spline<BASIS_BILINEAR>::GetPatchWeights(param, s, t, point, deriv1, deriv2, deriv11, deriv22, deriv12);
+    Spline<BASIS_BILINEAR>::GetPatchWeights(param, s, t, point, derivS, derivT,
+                                            derivSS, derivTT, derivST);
 }
 
 void GetBezierWeights(PatchParam const param,
-    float s, float t, float point[16], float deriv1[16], float deriv2[16]) {
+    float s, float t, float point[16], float derivS[16], float derivT[16]) {
 
-    Spline<BASIS_BEZIER>::GetPatchWeights(param, s, t, point, deriv1, deriv2);
+    Spline<BASIS_BEZIER>::GetPatchWeights(param, s, t, point, derivS, derivT);
 }
 
 void GetBSplineWeights(PatchParam const & param,
-    float s, float t, float point[16], float deriv1[16], float deriv2[16], float deriv11[16], float deriv22[16], float deriv12[16]) {
+    float s, float t, float point[16], float derivS[16], float derivT[16],
+    float derivSS[16], float derivTT[16], float derivST[16]) {
 
-    Spline<BASIS_BSPLINE>::GetPatchWeights(param, s, t, point, deriv1, deriv2, deriv11, deriv22, deriv12);
+    Spline<BASIS_BSPLINE>::GetPatchWeights(param, s, t, point, derivS, derivT,
+                                           derivSS, derivTT, derivST);
 }
 
 void GetGregoryWeights(PatchParam const & param,
-    float s, float t, float point[20], float deriv1[20], float deriv2[20]) {
-
-float deriv11[20], deriv22[20], deriv12[20], deriv21[20]; // **hardcoding it by now, assuming cross derivatives are different
+    float s, float t, float point[20], float derivS[20], float derivT[20],
+    float derivSS[20], float derivTT[20], float derivST[20], float derivTS[20]) {
 
     //
     //  P3         e3-      e2+         P2
@@ -386,9 +393,10 @@ float deriv11[20], deriv22[20], deriv12[20], deriv21[20]; // **hardcoding it by 
     float Bt[4], Bdt[4], Bdtt[4];
 
     param.Normalize(s,t);
+    float dScale = 1.0f/(float)param.GetParamFraction();
 
-    Spline<BASIS_BEZIER>::GetWeights(s, Bs, deriv1 ? Bds : 0, deriv11 ? Bdss : 0);
-    Spline<BASIS_BEZIER>::GetWeights(t, Bt, deriv2 ? Bdt : 0, deriv22 ? Bdtt : 0);
+    Spline<BASIS_BEZIER>::GetWeights(s, Bs, derivS ? Bds : 0, derivSS ? Bdss : 0);
+    Spline<BASIS_BEZIER>::GetWeights(t, Bt, derivT ? Bdt : 0, derivTT ? Bdtt : 0);
 
     //  Rational multipliers G at s and t:
     float sC = 1.0f - s;
@@ -421,9 +429,8 @@ float deriv11[20], deriv22[20], deriv12[20], deriv21[20]; // **hardcoding it by 
     //  unclear if the approximations will hold up under surface analysis involving higher
     //  order differentiation.
     //
-    if (deriv1 and deriv2) {
+    if (derivS and derivT) {
         //  Remember to include derivative scaling in all assignments below:
-        float dScale = (float)(1 << param.GetDepth());
 
         //  Combined weights for boundary points -- simple (scaled) tensor products:
         for (int i = 0; i < 12; ++i) {
@@ -431,8 +438,8 @@ float deriv11[20], deriv22[20], deriv12[20], deriv21[20]; // **hardcoding it by 
             int tRow = boundaryBezTRow[i];
             int sCol = boundaryBezSCol[i];
 
-            deriv1[iDst] = Bds[sCol] * Bt[tRow] * dScale;
-            deriv2[iDst] = Bdt[tRow] * Bs[sCol] * dScale;
+            derivS[iDst] = Bds[sCol] * Bt[tRow] * dScale;
+            derivT[iDst] = Bdt[tRow] * Bs[sCol] * dScale;
         }
 
 #define _USE_BEZIER_PSEUDO_DERIVATIVES
@@ -447,8 +454,8 @@ float deriv11[20], deriv22[20], deriv12[20], deriv21[20]; // **hardcoding it by 
             int tRow = interiorBezTRow[i];
             int sCol = interiorBezSCol[i];
 
-            deriv1[iDst] = Bds[sCol] * Bt[tRow] * G[i] * dScale;
-            deriv2[iDst] = Bdt[tRow] * Bs[sCol] * G[i] * dScale;
+            derivS[iDst] = Bds[sCol] * Bt[tRow] * G[i] * dScale;
+            derivT[iDst] = Bdt[tRow] * Bs[sCol] * G[i] * dScale;
         }
 #else
         //  True Gregory derivatives using appropriate differentiation of composite functions:
@@ -481,16 +488,15 @@ float deriv11[20], deriv22[20], deriv12[20], deriv21[20]; // **hardcoding it by 
             float Gdt = (Ndt[i] - Ddt[i] * G[i]) * D[i];
 
             //  Product rule combining B and B' with G and G' (and scaled):
-            deriv1[iDst] = (Bds[sCol] * G[i] + Bs[sCol] * Gds) * Bt[tRow] * dScale;
-            deriv2[iDst] = (Bdt[tRow] * G[i] + Bt[tRow] * Gdt) * Bs[sCol] * dScale;
+            derivS[iDst] = (Bds[sCol] * G[i] + Bs[sCol] * Gds) * Bt[tRow] * dScale;
+            derivT[iDst] = (Bdt[tRow] * G[i] + Bt[tRow] * Gdt) * Bs[sCol] * dScale;
         }
 #endif
     }
 
-    // **** SECOND DERIVATIVES. NOT TESTED!!!
-    if (deriv11 and deriv22 and deriv12 and deriv21) {
+    if (derivSS and derivTT and derivST and derivTS) {
 
-        float dScale = (float)(1 << param.GetDepth());
+        float dScale2 = dScale * dScale;
 
         // boundary points
         for (int i = 0; i < 12; ++i) {
@@ -498,9 +504,9 @@ float deriv11[20], deriv22[20], deriv12[20], deriv21[20]; // **hardcoding it by 
             int tRow = boundaryBezTRow[i];
             int sCol = boundaryBezSCol[i];
 
-            deriv11[iDst] = Bdss[sCol] * Bt[tRow] * dScale;
-            deriv22[iDst] = Bdtt[tRow] * Bs[sCol] * dScale;
-            deriv12[iDst] = deriv21[iDst] = Bds[sCol] * Bdt[tRow] * dScale;
+            derivSS[iDst] = Bdss[sCol] * Bt[tRow] * dScale2;
+            derivTT[iDst] = Bdtt[tRow] * Bs[sCol] * dScale2;
+            derivST[iDst] = derivTS[iDst] = Bds[sCol] * Bdt[tRow] * dScale2;
         }
 
         // interior points
@@ -533,11 +539,15 @@ float deriv11[20], deriv22[20], deriv12[20], deriv21[20]; // **hardcoding it by 
             float Gdts = Ndt[i] * Dds[i] * DD - Ddt[i] * ( Gds * D[i] + G[i] * DD * Dds[i] );
 
             //  Second derivatives for interior points
-            deriv11[iDst] = Bt[tRow] * ( Gds * Bds[sCol] + G[i] * Bdss[sCol] + Bds[sCol] * Gds + Bs[sCol] * Gdss ) * dScale;
-            deriv22[iDst] = Bs[sCol] * ( Gdt * Bdt[tRow] + G[i] * Bdtt[tRow] + Bdt[tRow] * Gdt + Bt[tRow] * Gdtt ) * dScale;
+            derivSS[iDst] = Bt[tRow] *
+                    ( Gds * Bds[sCol] + G[i] * Bdss[sCol] + Bds[sCol] * Gds + Bs[sCol] * Gdss ) * dScale2;
+            derivTT[iDst] = Bs[sCol] *
+                    ( Gdt * Bdt[tRow] + G[i] * Bdtt[tRow] + Bdt[tRow] * Gdt + Bt[tRow] * Gdtt ) * dScale2;
 
-            deriv12[iDst] = ( Bds[sCol] * ( Bdt[tRow] * G[i] + Bt[tRow] * Gdt ) + Bs[sCol] * (Bdt[tRow] * Gds + Bt[tRow] * Gdst )) * dScale;
-            deriv21[iDst] = ( Bdt[tRow] * ( Bds[sCol] * G[i] + Bs[sCol] * Gds ) + Bt[tRow] * (Bds[sCol] * Gdt + Bs[sCol] * Gdts )) * dScale;
+            derivST[iDst] = ( Bds[sCol] * ( Bdt[tRow] * G[i] + Bt[tRow] * Gdt ) +
+                              Bs[sCol] * (Bdt[tRow] * Gds + Bt[tRow] * Gdst )) * dScale2;
+            derivTS[iDst] = ( Bdt[tRow] * ( Bds[sCol] * G[i] + Bs[sCol] * Gds ) +
+                              Bt[tRow] * (Bds[sCol] * Gdt + Bs[sCol] * Gdts )) * dScale2;
 
         }
 

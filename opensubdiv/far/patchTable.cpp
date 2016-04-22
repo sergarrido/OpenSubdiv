@@ -424,17 +424,18 @@ PatchTable::print() const {
 //
 void
 PatchTable::EvaluateBasis(PatchHandle const & handle, float s, float t,
-    float wP[], float wDs[], float wDt[], float wDss[], float wDtt[], float wDst[]) const {
+    float wP[], float wDs[], float wDt[], float wDss[], float wDtt[], float wDst[], float wDts[]) const {
 
     PatchDescriptor::Type patchType = GetPatchArrayDescriptor(handle.arrayIndex).GetType();
     PatchParam const & param = _paramTable[handle.patchIndex];
-
     if (patchType == PatchDescriptor::REGULAR) {
         internal::GetBSplineWeights(param, s, t, wP, wDs, wDt, wDss, wDtt, wDst);
+        if(wDts != 0) memcpy(wDts, wDst, 16*sizeof(float));
     } else if (patchType == PatchDescriptor::GREGORY_BASIS) {
-        internal::GetGregoryWeights(param, s, t, wP, wDs, wDt);
+        internal::GetGregoryWeights(param, s, t, wP, wDs, wDt, wDss, wDtt, wDst, wDts);
     } else if (patchType == PatchDescriptor::QUADS) {
         internal::GetBilinearWeights(param, s, t, wP, wDs, wDt, wDss, wDtt, wDst);
+        if(wDts != 0) memcpy(wDts, wDst, 4*sizeof(float));
     } else {
         assert(0);
     }
