@@ -58,7 +58,7 @@ void GetBSplineWeights(PatchParam const & patchParam,
 
 void GetGregoryWeights(PatchParam const & patchParam,
     float s, float t, float wP[20], float wDs[20], float wDt[20],
-    float wDss[20]=0, float wDtt[20]=0, float wDst[20]=0, float wDts[20]=0);
+    float wDss[20]=0, float wDtt[20]=0, float wDst[20]=0);
 
 
 } // end namespace internal

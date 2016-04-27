@@ -350,7 +350,7 @@ void GetBSplineWeights(PatchParam const & param,
 
 void GetGregoryWeights(PatchParam const & param,
     float s, float t, float point[20], float derivS[20], float derivT[20],
-    float derivSS[20], float derivTT[20], float derivST[20], float derivTS[20]) {
+    float derivSS[20], float derivTT[20], float derivST[20]) {
 
     //
     //  P3         e3-      e2+         P2
@@ -429,6 +429,9 @@ void GetGregoryWeights(PatchParam const & param,
     //  unclear if the approximations will hold up under surface analysis involving higher
     //  order differentiation.
     //
+
+#define _USE_BEZIER_PSEUDO_DERIVATIVES
+
     if (derivS and derivT) {
         //  Remember to include derivative scaling in all assignments below:
 
@@ -442,8 +445,9 @@ void GetGregoryWeights(PatchParam const & param,
             derivT[iDst] = Bdt[tRow] * Bs[sCol] * dScale;
         }
 
-#define _USE_BEZIER_PSEUDO_DERIVATIVES
+
 #ifdef _USE_BEZIER_PSEUDO_DERIVATIVES
+
         //  Approximation to the true Gregory derivatives by differentiating the Bezier patch
         //  unique to the given (s,t), i.e. having F = (g^+ * f^+) + (g^- * f^-) as its four
         //  interior points:
@@ -469,7 +473,7 @@ void GetGregoryWeights(PatchParam const & param,
         //  friendly...) but for now we treat all 8 independently for simplicity.
         //
         //float N[8] = {   s,     t,      t,     sC,      sC,     tC,      tC,     s };
-        float D[8] = {   df0,   df0,    df1,    df1,     df2,    df2,     df3,   df3 };
+        float D_inv[8] = {   df0,   df0,    df1,    df1,     df2,    df2,     df3,   df3 };
 
         static float const Nds[8] = { 1.0f, 0.0f,  0.0f, -1.0f, -1.0f,  0.0f,  0.0f,  1.0f };
         static float const Ndt[8] = { 0.0f, 1.0f,  1.0f,  0.0f,  0.0f, -1.0f, -1.0f,  0.0f };
@@ -484,8 +488,8 @@ void GetGregoryWeights(PatchParam const & param,
             int sCol = interiorBezSCol[i];
 
             //  Quotient rule for G' (re-expressed in terms of G to simplify (and D = 1/D)):
-            float Gds = (Nds[i] - Dds[i] * G[i]) * D[i];
-            float Gdt = (Ndt[i] - Ddt[i] * G[i]) * D[i];
+            float Gds = (Nds[i] - Dds[i] * G[i]) * D_inv[i];
+            float Gdt = (Ndt[i] - Ddt[i] * G[i]) * D_inv[i];
 
             //  Product rule combining B and B' with G and G' (and scaled):
             derivS[iDst] = (Bds[sCol] * G[i] + Bs[sCol] * Gds) * Bt[tRow] * dScale;
@@ -494,7 +498,7 @@ void GetGregoryWeights(PatchParam const & param,
 #endif
     }
 
-    if (derivSS and derivTT and derivST and derivTS) {
+    if (derivSS and derivTT and derivST) {
 
         float dScale2 = dScale * dScale;
 
@@ -506,13 +510,13 @@ void GetGregoryWeights(PatchParam const & param,
 
             derivSS[iDst] = Bdss[sCol] * Bt[tRow] * dScale2;
             derivTT[iDst] = Bdtt[tRow] * Bs[sCol] * dScale2;
-            derivST[iDst] = derivTS[iDst] = Bds[sCol] * Bdt[tRow] * dScale2;
+            derivST[iDst] = Bds[sCol] * Bdt[tRow] * dScale2;
         }
+
 
         // interior points
         //float N[8] = {   s,     t,      t,     sC,      sC,     tC,      tC,     s };
-        float D[8] = {   df0,   df0,    df1,    df1,     df2,    df2,     df3,   df3 };
-        // Note D is actually 1/D !! So G = N*D
+        float D_inv[8] = {   df0,   df0,    df1,    df1,     df2,    df2,     df3,   df3 };
 
         static float const Nds[8] = { 1.0f, 0.0f,  0.0f, -1.0f, -1.0f,  0.0f,  0.0f,  1.0f };
         static float const Ndt[8] = { 0.0f, 1.0f,  1.0f,  0.0f,  0.0f, -1.0f, -1.0f,  0.0f };
@@ -527,16 +531,29 @@ void GetGregoryWeights(PatchParam const & param,
             int sCol = interiorBezSCol[i];
 
             //  Quotient rule for G' (re-expressed in terms of G to simplify (and D = 1/D)):
-            float Gds = (Nds[i] - Dds[i] * G[i]) * D[i];
-            float Gdt = (Ndt[i] - Ddt[i] * G[i]) * D[i];
+            float Gds = (Nds[i] - Dds[i] * G[i]) * D_inv[i];
+            float Gdt = (Ndt[i] - Ddt[i] * G[i]) * D_inv[i];
+
+#ifdef _USE_BEZIER_PSEUDO_DERIVATIVES
+
+            //derivSS[iDst] = Bt[tRow] * ( Bdss[sCol] * G[i] + Gds * Bds[sCol] ) * dScale2;
+            //derivTT[iDst] = Bs[sCol] * ( Bdtt[tRow] * G[i] + Gdt * Bdt[tRow] ) * dScale2;
+            //derivST[iDst] = Bds[sCol] * ( Bdt[tRow] * G[i] + Gdt * Bt[tRow] ) * dScale2;
+            //float derivTS = Bdt[tRow] * ( Bds[sCol] * G[i] + Gds * Bs[sCol] ) * dScale2;
+
+            derivSS[iDst] = Bt[tRow] * Bdss[sCol] * G[i] * dScale2;
+            derivTT[iDst] = Bs[sCol] * Bdtt[tRow] * G[i] * dScale2;
+            derivST[iDst] = Bds[sCol] * Bdt[tRow] * G[i] * dScale2;
+            float derivTS = Bdt[tRow] * Bds[sCol] * G[i] * dScale2;
+
+#else
 
             // Second derivatives of G
-            float DD = D[i] * D[i];
-            float Gdss = Nds[i] * Dds[i] * DD - Dds[i] * ( Gds * D[i] + G[i] * DD * Dds[i] );
-            float Gdst = Nds[i] * Ddt[i] * DD - Dds[i] * ( Gdt * D[i] + G[i] * DD * Ddt[i] );
+            float Gdss = Dds[i] * D_inv[i] * ( Nds[i] * D_inv[i] - Gds - G[i] * D_inv[i] * Dds[i] );
+            float Gdst = D_inv[i] * ( -Gdt * Dds[i] + Ddt[i] * D_inv[i] * ( -Nds[i] + Dds[i] * G[i] ) );
 
-            float Gdtt = Ndt[i] * Ddt[i] * DD - Ddt[i] * ( Gdt * D[i] + G[i] * DD * Ddt[i] );
-            float Gdts = Ndt[i] * Dds[i] * DD - Ddt[i] * ( Gds * D[i] + G[i] * DD * Dds[i] );
+            float Gdtt = D_inv[i] * Ddt[i] * ( Ndt[i] * D_inv[i] - Gdt - G[i] * D_inv[i] * Ddt[i] ) ;
+            //float Gdts = D_inv[i] * ( -Gds * Ddt[i] + Dds[i] * D_inv[i] * ( -Ndt[i] + Ddt[i] * G[i] ) );
 
             //  Second derivatives for interior points
             derivSS[iDst] = Bt[tRow] *
@@ -546,10 +563,14 @@ void GetGregoryWeights(PatchParam const & param,
 
             derivST[iDst] = ( Bds[sCol] * ( Bdt[tRow] * G[i] + Bt[tRow] * Gdt ) +
                               Bs[sCol] * (Bdt[tRow] * Gds + Bt[tRow] * Gdst )) * dScale2;
-            derivTS[iDst] = ( Bdt[tRow] * ( Bds[sCol] * G[i] + Bs[sCol] * Gds ) +
-                              Bt[tRow] * (Bds[sCol] * Gdt + Bs[sCol] * Gdts )) * dScale2;
+            //derivTS[iDst] = ( Bdt[tRow] * ( Bds[sCol] * G[i] + Bs[sCol] * Gds ) +
+            //                  Bt[tRow] * (Bds[sCol] * Gdt + Bs[sCol] * Gdts )) * dScale2;
+
+#endif
 
         }
+
+
 
     }
 

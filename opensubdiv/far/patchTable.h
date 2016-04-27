@@ -310,13 +310,11 @@ public:
     /// @param wDtt    Weights (evaluated basis functions) for second derivative wrt t
     ///
     /// @param wDst    Weights (evaluated basis functions) for second cross derivative
-    ///                wrt s and t (Except for gregory Wdst = Wdts)
-    /// @param wDts    Weights (evaluated basis functions) for second cross derivative
-    ///                wrt t and s (Except for gregory Wdst = Wdts)
+    ///                wrt s and t (Wdst = Wdts)
     ///
     void EvaluateBasis(PatchHandle const & handle, float s, float t,
         float wP[], float wDs[], float wDt[], float wDss[]=0, float wDtt[]=0,
-        float wDst[]=0, float wDts[]=0) const;
+        float wDst[]=0) const;
 
     //@}
 
