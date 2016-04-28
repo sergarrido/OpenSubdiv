@@ -394,7 +394,7 @@ void GetGregoryWeights(PatchParam const & param,
 
     param.Normalize(s,t);
     float dScale = 1.0f/(float)param.GetParamFraction();
-
+std::cout << "Normalized s=" << s << " t= " << t << std::endl;
     Spline<BASIS_BEZIER>::GetWeights(s, Bs, derivS ? Bds : 0, derivSS ? Bdss : 0);
     Spline<BASIS_BEZIER>::GetWeights(t, Bt, derivT ? Bdt : 0, derivTT ? Bdtt : 0);
 
@@ -549,11 +549,9 @@ void GetGregoryWeights(PatchParam const & param,
 #else
 
             // Second derivatives of G
-            float Gdss = Dds[i] * D_inv[i] * ( Nds[i] * D_inv[i] - Gds - G[i] * D_inv[i] * Dds[i] );
-            float Gdst = D_inv[i] * ( -Gdt * Dds[i] + Ddt[i] * D_inv[i] * ( -Nds[i] + Dds[i] * G[i] ) );
-
-            float Gdtt = D_inv[i] * Ddt[i] * ( Ndt[i] * D_inv[i] - Gdt - G[i] * D_inv[i] * Ddt[i] ) ;
-            //float Gdts = D_inv[i] * ( -Gds * Ddt[i] + Dds[i] * D_inv[i] * ( -Ndt[i] + Ddt[i] * G[i] ) );
+            float Gdss = -2.0f * Dds[i] * Gds * D_inv[i];
+            float Gdtt = -2.0f * Ddt[i] * Gdt * D_inv[i];
+            float Gdst = ( - Dds[i] * Gdt - Ddt[i] * Gds) * D_inv[i];
 
             //  Second derivatives for interior points
             derivSS[iDst] = Bt[tRow] *
