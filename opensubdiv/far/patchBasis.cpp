@@ -394,7 +394,7 @@ void GetGregoryWeights(PatchParam const & param,
 
     param.Normalize(s,t);
     float dScale = 1.0f/(float)param.GetParamFraction();
-std::cout << "Normalized s=" << s << " t= " << t << std::endl;
+
     Spline<BASIS_BEZIER>::GetWeights(s, Bs, derivS ? Bds : 0, derivSS ? Bdss : 0);
     Spline<BASIS_BEZIER>::GetWeights(t, Bt, derivT ? Bdt : 0, derivTT ? Bdtt : 0);
 
